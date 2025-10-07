@@ -1,0 +1,660 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ecuaciones Algebraicas: Aventura del Avatar</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: #1A1A1A;
+      color: #FFFFFF;
+      font-family: 'Press Start 2P', Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #start-screen, #game-container {
+      position: relative;
+      margin: 20px auto;
+      width: 600px;
+    }
+
+    #start-screen {
+      background-color: #000000;
+      border: 4px solid #ADD8E6;
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    #instructions {
+      font-size: 0.8em;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    #instructions img {
+      width: 150px;
+      height: auto;
+      margin: 10px;
+      border: 2px solid #ADD8E6;
+      border-radius: 5px;
+    }
+
+    #avatar-customizer {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
+    #avatar-customizer input[type="color"] {
+      width: 50px;
+      height: 30px;
+      padding: 0;
+      border: none;
+    }
+
+    #avatar-customizer input[type="text"] {
+      padding: 5px;
+      font-size: 1em;
+      border-radius: 5px;
+      width: 150px;
+    }
+
+    #start-btn, #next-btn, #restart-btn, #pause-btn {
+      background-color: #FF6F61;
+      color: #FFFFFF;
+      border: none;
+      padding: 10px 20px;
+      font-size: 0.9em;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+
+    #start-btn:hover, #next-btn:hover, #restart-btn:hover, #pause-btn:hover {
+      background-color: #FF4040;
+    }
+
+    #button-container {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    #equation-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    #equation-text {
+      font-size: 1.2em;
+      margin-top: 10px;
+      color: #FFFF00;
+    }
+
+    #timer {
+      font-size: 1em;
+      color: #FF6F61;
+      margin-top: 5px;
+    }
+
+    #canvas {
+      background-color: #000000;
+      border: 4px solid #ADD8E6;
+      border-radius: 10px;
+      display: none;
+    }
+
+    #score, #level {
+      font-size: 1.2em;
+      margin: 10px;
+      color: #FF6F61;
+    }
+
+    #result {
+      font-size: 0.9em;
+      margin-top: 20px;
+      color: #FFFFFF;
+      max-width: 600px;
+      text-align: left;
+      white-space: pre-wrap;
+    }
+
+    .correct {
+      color: #00FF00;
+      animation: pixelPop 0.5s ease;
+    }
+
+    .incorrect {
+      color: #FF0000;
+      animation: shake 0.4s ease;
+    }
+
+    @keyframes pixelPop {
+      0% { transform: scale(0.8); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes shake {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      50% { transform: translateX(10px); }
+      75% { transform: translateX(-10px); }
+      100% { transform: translateX(0); }
+    }
+
+    @keyframes deathSpin {
+      0% { transform: rotate(0deg); opacity: 1; }
+      100% { transform: rotate(360deg); opacity: 0; }
+    }
+
+    @media (max-width: 480px) {
+      #start-screen, #game-container {
+        width: 300px;
+      }
+
+      #canvas {
+        width: 300px;
+        height: 300px;
+      }
+
+      #equation-text {
+        font-size: 0.8em;
+      }
+
+      #score, #level {
+        font-size: 1em;
+      }
+
+      #avatar-customizer {
+        gap: 5px;
+      }
+
+      #avatar-customizer input[type="text"] {
+        width: 120px;
+      }
+
+      #instructions {
+        font-size: 0.7em;
+      }
+
+      #instructions img {
+        width: 100px;
+      }
+
+      #start-btn, #next-btn, #restart-btn, #pause-btn {
+        padding: 8px 16px;
+        font-size: 0.8em;
+      }
+
+      #result {
+        max-width: 300px;
+        font-size: 0.8em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Ecuaciones Algebraicas: Aventura del Avatar</h1>
+  <div id="start-screen">
+    <h2>Personaliza tu Avatar</h2>
+    <div id="instructions">
+      <p>¡Bienvenido a Ecuaciones Algebraicas!</p>
+      <p>Observa la ecuación de primer grado durante 20 segundos y calcula mentalmente la solución. Las ecuaciones se vuelven más difíciles en niveles altos. Mueve tu avatar con las flechas al resultado correcto, evitando muros y fantasmas que te persiguen de forma impredecible. Si aciertas, avanzas de nivel. Si fallas o te atrapa un fantasma, pierdes 5 puntos y debes clicar "Jugar de Nuevo". Usa 'R' para reiniciar o "Pausar" para pausar/reanudar.</p>
+      <img src="./images/equation.jpg" alt="Ejemplo de ecuación: 2x + 3 = 7">
+      <img src="./images/game-scene.jpg" alt="Vista del juego: avatar, muros, fantasmas, opciones">
+      <img src="./images/controls.jpg" alt="Usa las flechas para mover el avatar y evitar fantasmas">
+    </div>
+    <div id="avatar-customizer">
+      <label for="avatar-color">Color:</label>
+      <input type="color" id="avatar-color" value="#00FF00">
+      <label for="avatar-name">Nombre (máx. 10 caracteres):</label>
+      <input type="text" id="avatar-name" placeholder="Tu nombre" maxlength="10">
+      <button id="start-btn">Iniciar Juego</button>
+    </div>
+  </div>
+  <div id="game-container" style="display: none;">
+    <div id="equation-container">
+      <p id="equation-text"></p>
+      <p id="timer"></p>
+    </div>
+    <canvas id="canvas" width="600" height="600"></canvas>
+    <div id="button-container">
+      <button id="pause-btn">Pausar</button>
+      <button id="next-btn">Siguiente Nivel</button>
+      <button id="restart-btn">Jugar de Nuevo</button>
+    </div>
+  </div>
+  <div id="score">Puntuación: 0</div>
+  <div id="level">Nivel: 1</div>
+  <p id="result"></p>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const equationText = document.getElementById('equation-text');
+    const timerDisplay = document.getElementById('timer');
+    const scoreDisplay = document.getElementById('score');
+    const levelDisplay = document.getElementById('level');
+    const result = document.getElementById('result');
+    const nextBtn = document.getElementById('next-btn');
+    const restartBtn = document.getElementById('restart-btn');
+    const startBtn = document.getElementById('start-btn');
+    const pauseBtn = document.getElementById('pause-btn');
+    const startScreen = document.getElementById('start-screen');
+    const gameContainer = document.getElementById('game-container');
+    const avatarColorInput = document.getElementById('avatar-color');
+    const avatarNameInput = document.getElementById('avatar-name');
+
+    let score = 0;
+    let level = 1;
+    let attempts = 0;
+    let player = { x: 50, y: 50, speed: 3, color: '#00FF00', name: 'Avatar' };
+    let options = [];
+    let ghosts = [];
+    let walls = [];
+    let currentEquation = null;
+    let correctAnswer = null;
+    let gameRunning = false;
+    let gamePaused = false;
+    let thinkingTime = 0;
+    let timerInterval = null;
+    let animationId = null;
+    let keys = {};
+    let remainingThinkingTime = 20;
+    let frameCount = 0;
+
+    // Sonidos
+    const correctSound = new Audio('https://cdn.pixabay.com/audio/2023/08/25/audio_b1a78f6c1e.mp3'); // Aplausos
+    const deathSound = new Audio('https://cdn.pixabay.com/audio/2022/03/10/audio_5a76c4e8b2.mp3'); // Buzzer
+
+    function generateEquation() {
+      let a, x, b, c, d;
+      if (level <= 3) {
+        a = Math.floor(Math.random() * 5) + 1; // 1 to 5
+        x = Math.floor(Math.random() * 11) - 5; // -5 to 5
+        b = Math.floor(Math.random() * 21) - 10; // -10 to 10
+        c = a * x + b;
+        return { equation: `${a}x ${b >= 0 ? '+' : ''} ${b} = ${c}`, x };
+      } else if (level <= 6) {
+        a = Math.floor(Math.random() * 7) + 1; // 1 to 7
+        c = Math.floor(Math.random() * 7) + 1; // 1 to 7
+        x = Math.floor(Math.random() * 15) - 7; // -7 to 7
+        b = Math.floor(Math.random() * 31) - 15; // -15 to 15
+        d = a * x + b - c * x;
+        return { equation: `${a}x ${b >= 0 ? '+' : ''} ${b} = ${c}x ${d >= 0 ? '+' : ''} ${d}`, x };
+      } else {
+        a = Math.floor(Math.random() * 10) + 1; // 1 to 10
+        c = Math.floor(Math.random() * 10) + 1; // 1 to 10
+        if (a === c) c += Math.floor(Math.random() * 5) + 1; // Asegura complejidad
+        x = Math.floor(Math.random() * 21) - 10; // -10 to 10
+        b = Math.floor(Math.random() * 41) - 20; // -20 to 20
+        d = a * x + b - c * x;
+        return { equation: `${a}x ${b >= 0 ? '+' : ''} ${b} = ${c}x ${d >= 0 ? '+' : ''} ${d}`, x };
+      }
+    }
+
+    function applyCustomization() {
+      player.color = avatarColorInput.value;
+      player.name = avatarNameInput.value.trim();
+      if (!player.name) {
+        alert('Por favor, ingresa un nombre para tu avatar.');
+        return false;
+      }
+      return true;
+    }
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function startThinkingTimer() {
+      thinkingTime = remainingThinkingTime;
+      timerDisplay.textContent = `Tiempo para calcular: ${thinkingTime}s`;
+      gameRunning = false;
+      timerInterval = setInterval(() => {
+        if (!gamePaused) {
+          thinkingTime--;
+          timerDisplay.textContent = `Tiempo para calcular: ${thinkingTime}s`;
+          if (thinkingTime <= 0) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            timerDisplay.textContent = '';
+            gameRunning = true;
+            gameLoop();
+          }
+        }
+      }, 1000);
+    }
+
+    function checkWallCollision(x, y, radius = 15) {
+      for (let wall of walls) {
+        if (x + radius > wall.x && x - radius < wall.x + wall.w &&
+            y + radius > wall.y && y - radius < wall.y + wall.h) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    async function loadLevel() {
+      result.textContent = '';
+      nextBtn.style.display = 'none';
+      restartBtn.style.display = 'none';
+      gamePaused = false;
+      pauseBtn.textContent = 'Pausar';
+      player.x = 50;
+      player.y = 50;
+      frameCount = 0;
+      remainingThinkingTime = 20;
+
+      const generated = generateEquation();
+      currentEquation = generated.equation;
+      correctAnswer = generated.x;
+      equationText.textContent = `Resuelve: ${currentEquation}`;
+
+      options = [{ text: correctAnswer, isCorrect: true }];
+      const wrongAnswers = new Set();
+      const wrongRange = level <= 3 ? 2 : level <= 6 ? 3 : 4;
+      while (wrongAnswers.size < 4) {
+        const wrong = correctAnswer + Math.floor(Math.random() * (wrongRange * 2 + 1)) - wrongRange;
+        if (wrong !== correctAnswer) wrongAnswers.add(wrong);
+      }
+      wrongAnswers.forEach(wrong => options.push({ text: wrong, isCorrect: false }));
+
+      const positions = shuffle([
+        { x: 100, y: 100 }, { x: 500, y: 100 }, { x: 100, y: 500 }, { x: 500, y: 500 }, { x: 300, y: 300 }
+      ]);
+      options = options.map((opt, i) => ({ ...opt, ...positions[i], text: opt.text.toString() }));
+
+      walls = [
+        { x: 150, y: 50, w: 300, h: 20 },
+        { x: 50, y: 150, w: 20, h: 300 },
+        { x: 530, y: 150, w: 20, h: 300 },
+        { x: 150, y: 530, w: 300, h: 20 }
+      ];
+
+      ghosts = [
+        { x: 300, y: 300, speed: 1.5, color: '#FF0000', direction: Math.random() * Math.PI * 2 },
+        { x: 350, y: 350, speed: 1.5, color: '#00FFFF', direction: Math.random() * Math.PI * 2 }
+      ];
+
+      levelDisplay.textContent = `Nivel: ${level}`;
+      if (animationId) cancelAnimationFrame(animationId);
+      if (timerInterval) clearInterval(timerInterval);
+      startThinkingTimer();
+    }
+
+    function gameLoop() {
+      if (!gameRunning || gamePaused) return;
+
+      frameCount++;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#808080';
+      walls.forEach(wall => {
+        ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+      });
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '14px Arial';
+      options.forEach(opt => {
+        ctx.fillText(opt.text, opt.x - 10, opt.y);
+      });
+
+      ghosts.forEach(ghost => {
+        ctx.fillStyle = ghost.color;
+        ctx.beginPath();
+        ctx.arc(ghost.x, ghost.y, 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        let newGhostX = ghost.x;
+        let newGhostY = ghost.y;
+
+        if (frameCount % 50 === 0) {
+          const rand = Math.random();
+          if (rand < 0.2) {
+            ghost.direction = Math.random() * Math.PI * 2;
+          } else if (rand < 0.3) {
+            const dx = player.x - ghost.x;
+            const dy = player.y - ghost.y;
+            ghost.direction = Math.atan2(-dy, -dx);
+          }
+        }
+
+        const dx = player.x - ghost.x;
+        const dy = player.y - ghost.y;
+        let angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * Math.PI / 2;
+
+        newGhostX += ghost.speed * Math.cos(angle);
+        newGhostY += ghost.speed * Math.sin(angle);
+
+        if (!checkWallCollision(newGhostX, newGhostY, 15)) {
+          ghost.x = newGhostX;
+          ghost.y = newGhostY;
+        } else {
+          ghost.direction += (Math.random() - 0.5) * Math.PI;
+        }
+
+        ghost.x = Math.max(15, Math.min(canvas.width - 15, ghost.x));
+        ghost.y = Math.max(15, Math.min(canvas.height - 15, ghost.y));
+      });
+
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
+      ctx.fillStyle = player.color;
+      ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.font = '10px Arial';
+      ctx.fillText(player.name, player.x - 20, player.y + 30);
+
+      let newX = player.x;
+      let newY = player.y;
+      if (keys.ArrowUp) newY -= player.speed;
+      if (keys.ArrowDown) newY += player.speed;
+      if (keys.ArrowLeft) newX -= player.speed;
+      if (keys.ArrowRight) newX += player.speed;
+
+      if (!checkWallCollision(newX, newY, 20)) {
+        player.x = newX;
+        player.y = newY;
+      }
+
+      player.x = Math.max(20, Math.min(canvas.width - 20, player.x));
+      player.y = Math.max(20, Math.min(canvas.height - 20, player.y));
+
+      options.forEach(opt => {
+        if (Math.abs(player.x - opt.x) < 20 && Math.abs(player.y - opt.y) < 20) {
+          gameRunning = false;
+          attempts++;
+          if (opt.isCorrect) {
+            score += 10;
+            result.textContent = `¡Correcto! x = ${correctAnswer}. Intentos: ${attempts}.`;
+            result.className = 'correct';
+            correctSound.play().catch(() => console.log('Error playing sound'));
+            nextBtn.style.display = 'inline-block';
+          } else {
+            score = Math.max(0, score - 5);
+            result.textContent = `Incorrecto. x = ${correctAnswer}. Intentos: ${attempts}.`;
+            result.className = 'incorrect';
+            deathSound.play().catch(() => console.log('Error playing sound'));
+            deathAnimation();
+          }
+          scoreDisplay.textContent = `Puntuación: ${score}`;
+        }
+      });
+
+      ghosts.forEach(ghost => {
+        if (Math.abs(player.x - ghost.x) < 20 && Math.abs(player.y - ghost.y) < 20) {
+          gameRunning = false;
+          attempts++;
+          score = Math.max(0, score - 5);
+          result.textContent = `¡Fantasma te atrapó! x = ${correctAnswer}. Intentos: ${attempts}.`;
+          result.className = 'incorrect';
+          deathSound.play().catch(() => console.log('Error playing sound'));
+          deathAnimation();
+        }
+      });
+
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function deathAnimation() {
+      let angle = 0;
+      const deathInterval = setInterval(() => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#808080';
+        walls.forEach(wall => ctx.fillRect(wall.x, wall.y, wall.w, wall.h));
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '14px Arial';
+        options.forEach(opt => ctx.fillText(opt.text, opt.x - 10, opt.y));
+        ghosts.forEach(ghost => {
+          ctx.fillStyle = ghost.color;
+          ctx.beginPath();
+          ctx.arc(ghost.x, ghost.y, 15, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        ctx.fillStyle = player.color;
+        ctx.fill();
+        ctx.fillStyle = '#000000';
+        ctx.font = '10px Arial';
+        ctx.fillText(player.name, -20, 30);
+        ctx.restore();
+        angle += Math.PI / 10;
+      }, 100);
+
+      setTimeout(() => {
+        clearInterval(deathInterval);
+        cancelAnimationFrame(animationId);
+        animationId = null;
+        restartBtn.style.display = 'inline-block';
+      }, 2000);
+    }
+
+    startBtn.onclick = () => {
+      if (applyCustomization()) {
+        startScreen.style.display = 'none';
+        gameContainer.style.display = 'block';
+        canvas.style.display = 'block';
+        attempts = 0;
+        loadLevel();
+      }
+    };
+
+    pauseBtn.onclick = () => {
+      if (thinkingTime > 0) {
+        gamePaused = !gamePaused;
+        pauseBtn.textContent = gamePaused ? 'Reanudar' : 'Pausar';
+        if (gamePaused) {
+          if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            remainingThinkingTime = thinkingTime;
+          }
+        } else {
+          if (!timerInterval) startThinkingTimer();
+        }
+      } else if (gameRunning) {
+        gamePaused = !gamePaused;
+        pauseBtn.textContent = gamePaused ? 'Reanudar' : 'Pausar';
+        if (!gamePaused && !animationId) gameLoop();
+      }
+    };
+
+    window.addEventListener('keydown', e => {
+      keys[e.key] = true;
+      if (e.key === 'r' || e.key === 'R') {
+        restartGame();
+      }
+    });
+
+    window.addEventListener('keyup', e => keys[e.key] = false);
+
+    nextBtn.onclick = () => {
+      level++;
+      attempts = 0;
+      loadLevel();
+    };
+
+    restartBtn.onclick = () => {
+      loadLevel();
+    };
+
+    function restartGame() {
+      score = 0;
+      level = 1;
+      attempts = 0;
+      scoreDisplay.textContent = `Puntuación: 0`;
+      levelDisplay.textContent = `Nivel: 1`;
+      startScreen.style.display = 'block';
+      gameContainer.style.display = 'none';
+      canvas.style.display = 'none';
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = null;
+      if (animationId) cancelAnimationFrame(animationId);
+      animationId = null;
+      remainingThinkingTime = 20;
+    }
+
+    correctSound.load();
+    deathSound.load();
+  </script>
+</body>
+</html>
